@@ -1,13 +1,5 @@
-/*
-* https://g.alicdn.com/AWSC/WebUMID/1.90.2/um.js
-* pc.woozooo
-*
-* */
-
 //babel库及文件模块导入
 const fs = require('fs');
-// const usefulPlugins = require("./base/tools/usefulPlugins");
-// const decodeObfuscator = require("./base/tools/decodeOb");
 //babel库相关，解析，转换，构建，生产
 const parser = require("@babel/parser");
 const traverse = require("@babel/traverse").default;
@@ -15,7 +7,6 @@ const types = require("@babel/types");
 const generator = require("@babel/generator").default;
 const template = require("@babel/template").default;
 global.t = types;
-console.log(t)
 
 //读取文件
 let encode_file = "G:\\hutao\\ast_code\\ast-code\\hutao\\encode.js",
@@ -33,25 +24,6 @@ let jscode = fs.readFileSync(encode_file, {encoding: "utf-8"});
 //转换为ast树
 let ast = parser.parse(jscode);
 
-var getCaseNode = function (list, path, insertNode) {
-    const {node} = path
-    let OaCases = node.cases
-    try {
-        let FaCases = node.cases[list[0]].consequent[0].expression.argument.callee.body.body[0]
-            .cases[list[1]].consequent[0].expression.argument.callee.body.body[0]
-            .cases[list[2]].consequent.unshift(insertNode)
-        // OaCases[list[0]]
-        // console.log(list, generator(FaCases).code)
-    } catch (e) {
-        console.log("_________________________________________________________")
-        // console.log(list,generator(OaCases[list[0]]).code)
-        OaCases[list[0]].consequent.unshift(insertNode)
-        console.log(list, generator(OaCases[list[0]]).code)
-        console.log("_________________________________________________________")
-        // console.log(e)
-    }
-}
-
 var getIndex = function (Oa) {
     var za = Oa >> 5;
     Fa = 31 & za;
@@ -63,68 +35,6 @@ var getOaValue = function (Oa, Fa, La) {
     let za = (La << 5) + Fa;
     Oa = (za << 5) + Oa
     return Oa
-}
-
-var caseData = function (discriminantI, caseI, path) {
-    const {consequent, test} = caseI
-    if (!t.isBreakStatement(consequent[consequent.length - 1])) return;
-    if (!t.isExpressionStatement(consequent[0])) return;
-    if (consequent.length != 2) return;
-    var SwitchValue = test.value
-
-    if (t.isUnaryExpression(consequent[0].expression)) {
-        var SwitchCasesNext = consequent[0].expression.argument.callee.body.body[0]
-
-        const {discriminant, cases} = SwitchCasesNext
-        // console.log(discriminantI.name, SwitchValue)
-        return [discriminant, cases];
-    } else {
-        let expression = consequent[0].expression
-        let expressions = expression.expressions
-        if (!Array.isArray(expressions)) return;
-        let indexObj = expressions[expressions.length - 1]
-        if (indexObj.left.name != "Oa") return;
-        if (indexObj.operator != "=") return;
-        if (!t.isNumericLiteral(indexObj.right)) return;
-        OaValue = indexObj.right.value
-        caseList = getIndex(OaValue)
-        expressions = caseI.consequent[0].expression.expressions
-        expressions.pop()
-        getCaseNode(caseList, path, caseI.consequent[0])
-        delete caseI.consequent[0]
-    }
-}
-
-var iftype = function (caseI) {
-    const {consequent} = caseI
-    if (!types.isBreakStatement(consequent[consequent.length - 1])) return false;
-    if (!types.isExpressionStatement(consequent[0])) return false;
-    if (consequent.length != 2) return false;
-    return true;
-}
-
-
-const visitor = {
-    SwitchStatement(path) {
-        const {node} = path
-        const {discriminant, cases} = node
-        if (!types.isBinaryExpression(discriminant)
-            || discriminant.left.value != 31) return;
-        const SwitchCases1 = cases
-
-        SwitchCases1.forEach(caseIndex => {
-            if (!iftype(caseIndex)) return;
-            SwitchCases2 = caseData(discriminant.right, caseIndex, path);
-            SwitchCases2[1].forEach(caseIndex1 => {
-                if (!iftype(caseIndex1)) return;
-                SwitchCases3 = caseData(SwitchCases2[0], caseIndex1, path)
-                SwitchCases3[1].forEach(caseIndex2 => {
-                    if (!iftype(caseIndex2)) return;
-                    caseData(SwitchCases3[0], caseIndex2, path)
-                })
-            })
-        })
-    }
 }
 
 
@@ -143,27 +53,54 @@ const decode_comma = {
 }
 traverse(ast, decode_comma);
 
+
+const removeSelfExecuting = {
+    UnaryExpression(path) {
+        const {operator, argument} = path.node;
+        if (operator !== "!" || !t.isCallExpression(argument))
+            return;
+        let {callee, arguments} = argument;
+        if (!t.isFunctionExpression(callee) || arguments.length !== 0)
+            return;
+        path.replaceInline(callee.body.body);
+    },
+}
+traverse(ast, removeSelfExecuting);
+var index = 0
 const decodeSwitchNesting = {
     // 拆解嵌套switch 合并为一个
-    SwitchCase(path) {
-        const {consequent, test} = path.node
-        if (test.value > 6) return;
-        consequent.forEach(i => {
-            if (t.isVariableDeclaration(i)) {
-                console.log(generator(i).code)
+    SwitchStatement(path) {
+        const {discriminant, cases} = path.node
+        //  特征判断 只处理最外层switch
+        if (!t.isBinaryExpression(discriminant)) return;
+        if (discriminant.right.name != "Oa") return;
+        //  遍历所有cases节点
+        for (let Oa = 0; Oa < cases.length; Oa++) {
+            FaSwitch = cases[Oa].consequent[0]
+            //  特征判断 只处理switch类型
+            if (!t.isSwitchStatement(FaSwitch)) return;
+            FaCases = FaSwitch.cases
+            for (let Fa = 0; Fa < FaCases.length; Fa++) {
+                //  因为检查过FaCases节点，所以这里不做判断，有报错再做判断也是可以的
+                LaSwitch = FaCases[Fa].consequent[0]
+                LaCases = LaSwitch.cases
+                for (let La = 0; La < LaCases.length; La++) {
+                    // console.log(generator(LaCases[La]).code)
+                    // console.log(getOaValue(Oa,Fa,La))
+                    index += 1
+                }
             }
-        })
+            // console.log(generator(FaSwitch).code)
+        }
+
+
+
+        // console.log(path.toString())
+
     }
 }
 traverse(ast, decodeSwitchNesting);
-
-
-// console.log(casesList)
-
-// const visitor2 = {
-//
-// }
-
+console.log(index)
 
 //生成新的js code，并保存到文件中输出
 let {code} = generator(ast, opts = {jsescOption: {"minimal": true}});
