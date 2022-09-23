@@ -51,8 +51,8 @@ const decode_comma = {
         path.replaceInline(body);
     },
 }
-traverse(ast, decode_comma);
 
+traverse(ast, decode_comma);
 
 const removeSelfExecuting = {
     UnaryExpression(path) {
@@ -65,15 +65,23 @@ const removeSelfExecuting = {
         path.replaceInline(callee.body.body);
     },
 }
+
 traverse(ast, removeSelfExecuting);
-var index = 0
+
 const decodeSwitchNesting = {
     // 拆解嵌套switch 合并为一个
     SwitchStatement(path) {
-        const {discriminant, cases} = path.node
+        let {discriminant, cases} = path.node
         //  特征判断 只处理最外层switch
         if (!t.isBinaryExpression(discriminant)) return;
         if (discriminant.right.name != "Oa") return;
+        //  删除switch的兄弟节点 VariableDeclaration
+        delete path.parent.body[0]
+        //  构建一个 `Oa` (Identifier)节点 替换 `31 & Oa` (BinaryExpression)节点 name属性是required的
+        path.node.discriminant = {
+            type: "Identifier",
+            name: "Oa"
+        }
         //  遍历所有cases节点
         for (let Oa = 0; Oa < cases.length; Oa++) {
             FaSwitch = cases[Oa].consequent[0]
@@ -85,22 +93,21 @@ const decodeSwitchNesting = {
                 LaSwitch = FaCases[Fa].consequent[0]
                 LaCases = LaSwitch.cases
                 for (let La = 0; La < LaCases.length; La++) {
-                    // console.log(generator(LaCases[La]).code)
-                    // console.log(getOaValue(Oa,Fa,La))
-                    index += 1
+                    const {test, consequent} = LaCases[La]
+                    OaExpression = consequent[consequent.length - 2]
+                    // 替换 test.value
+                    test.value = getOaValue(Oa, Fa, La)
+                    // 将节点push到OaSwitch的cases中，也就是最外层switch
+                    cases.push(LaCases[La])
                 }
             }
-            // console.log(generator(FaSwitch).code)
+            // 删除处理过的cases节点
+            delete cases[Oa]
         }
-
-
-
-        // console.log(path.toString())
-
     }
 }
+
 traverse(ast, decodeSwitchNesting);
-console.log(index)
 
 //生成新的js code，并保存到文件中输出
 let {code} = generator(ast, opts = {jsescOption: {"minimal": true}});
