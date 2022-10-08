@@ -5,7 +5,7 @@
         fa = -1,
         da = 0;
         try {
-            function Ea(e, a) {1
+            function Ea(e, a) {
                 var r = "e", s;
                 r += "tag",
                 r += "UpadeS",
