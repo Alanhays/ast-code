@@ -221,6 +221,46 @@ const UniqueNodeMerging = {
 traverse(ast, UniqueNodeMerging);
 
 
+const test = {
+    SwitchCase(path) {
+        let conent_ = path.node.consequent
+        let OaConent = conent_[conent_.length - 2]
+        if (!t.isExpressionStatement(OaConent)) return;
+        if (!t.isAssignmentExpression(OaConent.expression)) return;
+        if (!t.isConditionalExpression(OaConent.expression.right)) return;
+        // if (t.isAssignmentExpression(OaConent.expression.right.test)) {
+        //     console.log(generator(OaConent.expression).code)
+        // }
+        if (t.isMemberExpression(OaConent.expression.right.test)) {
+            if (!t.isAssignmentExpression(OaConent.expression.right.test.object)) return;
+            console.log(generator(OaConent.expression).code)
+            let newMemberNode = {
+                type:"AssignmentExpression",
+                left:OaConent.expression.right.test.object.left,
+                operator:OaConent.expression.operator,
+                right: {
+                    type: "MemberExpression",
+                    object: {
+                        type: "Identifier",
+                        name: OaConent.expression.right.test.object.right.name
+                    },
+                    property: OaConent.expression.right.test.property,
+                    computed: OaConent.expression.right.test.computed
+                }
+            }
+            path.node.consequent.push(newMemberNode)
+            OaConent.expression.right.test = OaConent.expression.right.test.object.left
+            // console.log(generator(newMemberNode).code)
+        }
+
+
+        // console.log(path.node.test.value)
+        // console.log(generator(path.node).code)
+
+        // getTestNode(OaConent.expression.right.test)
+    }
+}
+traverse(ast, test);
 //生成新的js code，并保存到文件中输出
 let {code} = generator(ast, opts = {jsescOption: {"minimal": true}});
 
